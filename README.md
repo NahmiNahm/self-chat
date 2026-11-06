@@ -1,39 +1,33 @@
 # Self Chat
 
-A one-page chat for notes to yourself that starts blank every day. Type, press Enter, done.
+A one-page chat for notes and files to yourself that starts blank every day.
 
 - **Enter** sends. **Shift + Enter** adds a new line.
-- At midnight (your device's time), every message from the previous day is permanently deleted.
-- The trash button erases today's messages right away.
+- **Files of any type**, zip included, up to 50 MB each. Use the paperclip, drag them onto the page, or paste them. Tap a file to download it.
+- **New messages show up on their own.** The page checks every few seconds while it's open, and about every 30 seconds while it's in the background.
+- At midnight (your device's time), every message and file from the previous day is permanently deleted.
+- The trash button erases today's messages and files right away.
 - Your token is saved only in the browser you enter it in.
 
 ## How it works
 
-Messages are saved as comments on a single issue, titled "Self Chat", in a private repo. The page creates that issue the first time you connect. Whenever the page opens, comes back into view, or reaches midnight, it deletes every comment from before today.
+**Messages** are saved as comments on one issue, titled "Self Chat", in a private repo. Deleting a comment removes it from GitHub.
 
-The page uses issue comments instead of files because a deleted comment is removed from GitHub. Deleting a file only hides it, since the old version stays in the repo's history.
+**Files** are encrypted in your browser with a new random key for each file before they're uploaded. The encrypted file is stored on a branch for that day (`selfchat-files/YYYY-MM-DD`). The key is stored only in that file's comment. When the day is erased, the comment and the key are deleted along with the branch. Any copy GitHub keeps internally after that is unreadable without the key, so it stays scrambled. File names appear only in the comments, never in the repo's file list.
 
-## Setup
+**Live updates** use GitHub's "has anything changed?" check. When nothing has changed, the check is very cheap, and those checks don't count against GitHub's hourly API limit.
 
-### 1. Private data repo
+## Token permissions
 
-A private repo named `self-chat-data` with **Issues** turned on (the default for new repos).
+Use a fine-grained token at https://github.com/settings/personal-access-tokens, limited to `self-chat-data`, with these repository permissions:
 
-### 2. Fine-grained token
-
-1. Go to https://github.com/settings/personal-access-tokens
-2. Create a new token, or edit your existing `self-chat` token
-3. Repository access: **Only select repositories**, then `self-chat-data`
-4. Repository permissions: **Issues: Read and write**. Contents access isn't needed anymore.
-5. Save, and copy the token if it's new
-
-### 3. Page
-
-`index.html` is hosted from the public `self-chat` repo with GitHub Pages. Open the page, enter your username, `self-chat-data`, and the token, then click **Save and connect**. Do this once on each device.
+- **Issues: Read and write** (messages)
+- **Contents: Read and write** (files)
 
 ## Good to know
 
-- **Erased means deleted from GitHub.** Comments are removed through GitHub's API, and nothing remains in the repo or the issue. Like any online service, GitHub may keep internal backups for a while under its own data retention policy.
-- **Midnight uses your device's clock.** If the page is closed at midnight, the erase happens the next time you open it.
-- **Failed sends** show with a red outline. Tap one to retry. Anything typed before midnight that never saved is dropped at midnight.
-- **Forget token** in settings removes the token from that browser. To cut off access everywhere, delete the token at https://github.com/settings/personal-access-tokens
+- If the page is closed at midnight, the erase happens the next time you open it.
+- Failed sends show with a red outline. Tap one to retry.
+- The 50 MB limit is per file. Larger files are refused before anything is uploaded.
+- Like any online service, GitHub may keep internal backups for a while. Deleted messages could exist in those backups. Files stay unreadable, because their keys are gone.
+- **Forget token** in settings removes the token from that browser. To cut off access everywhere, delete the token.

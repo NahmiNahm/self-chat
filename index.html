@@ -61,6 +61,7 @@
   }
   header h1 { font-size: 16px; font-weight: 600; margin: 0; }
   #today { font-size: 13px; color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 380px) { #today { visibility: hidden; } }
   #status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; margin-right: 4px; }
   #status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
   #status[data-s="ok"]::before { background: var(--ok); }
@@ -89,10 +90,18 @@
     white-space: pre-wrap; overflow-wrap: anywhere;
   }
   .bubble a { color: inherit; text-decoration: underline; }
+  .file {
+    display: flex; align-items: center; gap: 10px; text-align: left;
+    font: inherit; border: 0; cursor: pointer; min-width: 0; max-width: 100%;
+  }
+  .file svg { flex: none; }
+  .file .fn { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file .fs { display: block; font-size: 12px; opacity: .85; }
+  .file .ft { min-width: 0; }
   .meta { font-size: 11px; color: var(--muted); margin: 2px 4px 6px; }
   .msg.sending .bubble { opacity: .6; }
-  .msg.failed .bubble { background: transparent; color: var(--text); border: 1px solid var(--danger); cursor: pointer; }
-  .msg.failed .meta { color: var(--danger); }
+  .msg.failed .bubble, .msg.rejected .bubble { background: transparent; color: var(--text); border: 1px solid var(--danger); cursor: pointer; }
+  .msg.failed .meta, .msg.rejected .meta { color: var(--danger); }
   #empty { margin: auto; color: var(--muted); text-align: center; font-size: 14px; padding: 24px; }
   footer {
     border-top: 1px solid var(--border);
@@ -101,8 +110,9 @@
     padding-bottom: max(10px, env(safe-area-inset-bottom));
   }
   .composer { max-width: 760px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; }
+  .composer .icon-btn { height: 42px; width: 38px; }
   textarea {
-    flex: 1; resize: none; max-height: 40vh; min-height: 42px;
+    flex: 1; resize: none; max-height: 40vh; min-height: 42px; min-width: 0;
     font: inherit; color: var(--text); background: var(--bg);
     border: 1px solid var(--border); border-radius: 12px; padding: 9px 12px; outline: none;
   }
@@ -113,6 +123,11 @@
   }
   #send:disabled { opacity: .5; cursor: default; }
   .hint { max-width: 760px; margin: 4px auto 0; font-size: 11px; color: var(--muted); }
+  #drop {
+    position: fixed; inset: 0; display: none; place-items: center;
+    background: rgba(0,0,0,.45); color: #fff; font-size: 18px; font-weight: 600; z-index: 10; pointer-events: none;
+  }
+  body.dragging #drop { display: grid; }
 
   dialog {
     border: 1px solid var(--border); border-radius: 14px; padding: 0;
@@ -134,7 +149,6 @@
   .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
   .btn.danger { color: var(--danger); }
   .btn.left { margin-right: auto; }
-  @media (max-width: 380px) { #today { visibility: hidden; } }
   #cfgMsg { font-size: 13px; min-height: 1em; }
   #cfgMsg.err { color: var(--danger); }
   #cfgMsg.ok { color: var(--ok); }
@@ -148,9 +162,6 @@
   <button class="icon-btn" id="clearBtn" title="Erase today now" aria-label="Erase today now" disabled>
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
   </button>
-  <button class="icon-btn" id="refreshBtn" title="Refresh" aria-label="Refresh">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
-  </button>
   <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
   </button>
@@ -160,16 +171,22 @@
 
 <footer>
   <div class="composer">
+    <button class="icon-btn" id="attachBtn" title="Attach files" aria-label="Attach files" disabled>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+    </button>
+    <input type="file" id="fileInput" multiple hidden>
     <textarea id="box" rows="1" placeholder="Type and press Enter" autocomplete="off" disabled></textarea>
     <button id="send" disabled>Send</button>
   </div>
-  <div class="hint">Enter sends. Shift + Enter adds a new line. Everything is erased at midnight.</div>
+  <div class="hint">Enter sends. Shift + Enter adds a new line. Drop or paste files to attach. Everything is erased at midnight.</div>
 </footer>
+
+<div id="drop">Drop files to send</div>
 
 <dialog id="settings">
   <div class="dlg">
     <h2>Connect to GitHub</h2>
-    <p>Messages are saved as comments on one issue in a private repo you own, and erased each day. Your token is stored only in this browser.</p>
+    <p>Messages and files are saved in a private repo you own and erased each day. Your token is stored only in this browser.</p>
     <label>GitHub username or org
       <input id="cfgOwner" placeholder="NahmiNahm" autocapitalize="off" autocorrect="off" spellcheck="false">
     </label>
@@ -190,7 +207,7 @@
 
 <dialog id="confirmClear">
   <div class="dlg">
-    <h2>Erase today's messages?</h2>
+    <h2>Erase today's messages and files?</h2>
     <p>They're deleted from GitHub right away and can't be recovered.</p>
     <div class="row">
       <button class="btn" id="clearCancel">Cancel</button>
@@ -206,19 +223,28 @@
   const API = "https://api.github.com";
   const LS_KEY = "selfchat.v2";
   const ISSUE_TITLE = "Self Chat";
+  const FILE_REF_PREFIX = "selfchat-files/";
+  const MAX_FILE = 50 * 1024 * 1024;           // 50 MB per file
+  const POLL_VISIBLE = 4000, POLL_HIDDEN = 30000;
+  const FILE_MARK = /<!--\s*selfchat-file\s+(\{[\s\S]*?\})\s*-->/;
 
   // ---------- state ----------
   let cfg = readCfg();
-  let msgs = [];          // today's saved messages: { id, t, text }
-  let pending = [];       // not yet saved: { id, t, text, status: 'sending'|'failed' }
+  let ready = false;
+  let msgs = [];          // today's saved messages: { id, t, text, file? }
+  let pending = [];       // { id, t, text?|file?, status: 'sending'|'failed'|'rejected' }
   let flushing = false;
   let refreshing = null;
-  let midnightTimer = null;
+  let midnightTimer = null, pollTimer = null;
+  let etag = null, lastCount = 0, localVersion = 0;
+  let cleanedDay = "";
+  let unseen = 0;
 
   // ---------- dom ----------
   const $ = id => document.getElementById(id);
   const log = $("log"), inner = $("inner"), box = $("box"), sendBtn = $("send");
   const statusEl = $("status"), todayEl = $("today"), clearBtn = $("clearBtn");
+  const attachBtn = $("attachBtn"), fileInput = $("fileInput");
   const dlg = $("settings"), confirmDlg = $("confirmClear");
 
   function readCfg() {
@@ -231,15 +257,42 @@
   // ---------- helpers ----------
   function setStatus(text, s) { statusEl.textContent = text; statusEl.dataset.s = s; }
   function startOfToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+  function dayKey(d = new Date()) {
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
   function showToday() {
     todayEl.textContent = new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   }
-  function enableInput(on) { box.disabled = sendBtn.disabled = clearBtn.disabled = !on; }
+  function enableInput(on) { box.disabled = sendBtn.disabled = clearBtn.disabled = attachBtn.disabled = !on; }
   function newId() {
     return "tmp-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
   }
   function openDlg(d) { if (typeof d.showModal === "function") d.showModal(); else d.setAttribute("open", ""); }
   function closeDlg(d) { if (d.close) d.close(); else d.removeAttribute("open"); }
+  function fmtSize(n) {
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB";
+    return (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + " MB";
+  }
+  function bytesToB64(bytes) {
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  function b64ToBytes(b64) {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function blobToB64(blob) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(",")[1] || "");
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+  }
 
   // ---------- GitHub API ----------
   function repoBase() {
@@ -247,15 +300,18 @@
   }
 
   async function gh(path, opts = {}) {
-    const headers = { "Accept": "application/vnd.github+json", "Authorization": "Bearer " + cfg.token };
+    const headers = { "Accept": opts.accept || "application/vnd.github+json", "Authorization": "Bearer " + cfg.token };
     if (opts.body) headers["Content-Type"] = "application/json";
+    if (opts.etag) headers["If-None-Match"] = opts.etag;
     let res;
     try {
       res = await fetch(API + path, { method: opts.method || "GET", headers, body: opts.body, cache: "no-store" });
     } catch {
       const err = new Error("Network error"); err.status = 0; throw err;
     }
+    if (res.status === 304) return { status: 304, data: null };
     if (res.status === 204) return { status: 204, data: null };
+    if (opts.binary && res.ok) return { status: res.status, data: await res.arrayBuffer() };
     let data = null;
     try { data = await res.json(); } catch {}
     if (!res.ok) {
@@ -263,7 +319,7 @@
       err.status = res.status;
       throw err;
     }
-    return { status: res.status, data };
+    return { status: res.status, data, etag: res.headers.get("ETag") };
   }
 
   async function findOrCreateIssue() {
@@ -289,31 +345,136 @@
     return cfg.issue;
   }
 
-  async function listComments() {
-    const out = [];
-    for (let page = 1; page <= 50; page++) {
-      const r = await gh(repoBase() + "/issues/" + cfg.issue + "/comments?per_page=100&page=" + page);
-      for (const c of r.data) out.push({ id: c.id, t: c.created_at, text: c.body || "" });
-      if (r.data.length < 100) break;
+  function toMsg(c) {
+    const body = c.body || "";
+    const m = body.match(FILE_MARK);
+    if (m) {
+      try {
+        const f = JSON.parse(m[1]);
+        if (f && f.blob && f.k && f.iv) return { id: c.id, t: c.created_at, file: f };
+      } catch {}
     }
+    return { id: c.id, t: c.created_at, text: body };
+  }
+
+  // Returns null when nothing has changed since the last check.
+  async function listComments(useEtag) {
+    const base = repoBase() + "/issues/" + cfg.issue + "/comments?per_page=100&page=";
+    const first = await gh(base + 1, { etag: useEtag && lastCount < 100 ? etag : null });
+    if (first.status === 304) return null;
+    etag = first.etag;
+    const raw = first.data.slice();
+    if (first.data.length === 100) {
+      for (let page = 2; page <= 50; page++) {
+        const r = await gh(base + page);
+        raw.push(...r.data);
+        if (r.data.length < 100) break;
+      }
+    }
+    lastCount = raw.length;
+    const out = raw.map(toMsg);
     out.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0));
     return out;
   }
 
   async function deleteComment(id) {
     try { await gh(repoBase() + "/issues/comments/" + id, { method: "DELETE" }); }
-    catch (e) { if (e.status !== 404) throw e; }  // already gone (another device erased it)
+    catch (e) { if (e.status !== 404) throw e; }
   }
 
   async function deleteAll(list) {
-    // small parallel batches to stay well under GitHub's rate limits
     for (let i = 0; i < list.length; i += 5) {
       await Promise.all(list.slice(i, i + 5).map(m => deleteComment(m.id)));
     }
   }
 
+  // Files live on one branch per day. Deleting the branch removes them from
+  // the repo; the per-file key lived only in the (deleted) comment, so any
+  // copy GitHub keeps internally can't be decrypted.
+  async function deleteFileRefs(all) {
+    let refs = [];
+    try {
+      const r = await gh(repoBase() + "/git/matching-refs/heads/" + FILE_REF_PREFIX);
+      refs = (r.data || []).map(x => x.ref.replace("refs/heads/", ""));
+    } catch (e) {
+      if (e.status === 403 || e.status === 404 || e.status === 409) return; // no Contents access, or empty repo
+      throw e;
+    }
+    const today = dayKey();
+    for (const ref of refs) {
+      const day = ref.slice(FILE_REF_PREFIX.length);
+      if (all || day < today) {
+        try { await gh(repoBase() + "/git/refs/heads/" + ref, { method: "DELETE" }); }
+        catch (e) { if (e.status !== 422 && e.status !== 404) throw e; }
+      }
+    }
+  }
+
+  async function uploadFile(file) {
+    // 1. encrypt in the browser with a fresh key for this file
+    const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plain = await file.arrayBuffer();
+    const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain);
+    const rawKey = new Uint8Array(await crypto.subtle.exportKey("raw", key));
+
+    // 2. store the encrypted bytes as a git blob
+    const content = await blobToB64(new Blob([ct]));
+    const blob = await gh(repoBase() + "/git/blobs", {
+      method: "POST", body: JSON.stringify({ content, encoding: "base64" })
+    });
+    const blobSha = blob.data.sha;
+
+    // 3. commit it to today's file branch so it stays reachable until erase
+    const ref = FILE_REF_PREFIX + dayKey();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      let parent = null, baseTree = null;
+      try {
+        const r = await gh(repoBase() + "/git/ref/heads/" + ref);
+        parent = r.data.object.sha;
+        const c = await gh(repoBase() + "/git/commits/" + parent);
+        baseTree = c.data.tree.sha;
+      } catch (e) { if (e.status !== 404) throw e; }
+      const treeBody = { tree: [{ path: blobSha, mode: "100644", type: "blob", sha: blobSha }] };
+      if (baseTree) treeBody.base_tree = baseTree;
+      const tree = await gh(repoBase() + "/git/trees", { method: "POST", body: JSON.stringify(treeBody) });
+      const commit = await gh(repoBase() + "/git/commits", {
+        method: "POST",
+        body: JSON.stringify({ message: "file", tree: tree.data.sha, parents: parent ? [parent] : [] })
+      });
+      try {
+        if (parent) {
+          await gh(repoBase() + "/git/refs/heads/" + ref, { method: "PATCH", body: JSON.stringify({ sha: commit.data.sha, force: false }) });
+        } else {
+          await gh(repoBase() + "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/" + ref, sha: commit.data.sha }) });
+        }
+        break;
+      } catch (e) {
+        if (e.status !== 422 || attempt === 4) throw e;   // another device moved the branch; try again
+      }
+    }
+
+    // 4. post the comment that carries the name and key
+    const meta = { v: 1, name: file.name || "file", size: file.size, type: file.type || "", blob: blobSha, k: bytesToB64(rawKey), iv: bytesToB64(iv) };
+    const body = "📎 " + meta.name + " (" + fmtSize(meta.size) + ")\n<!-- selfchat-file " + JSON.stringify(meta) + " -->";
+    const r = await gh(repoBase() + "/issues/" + cfg.issue + "/comments", { method: "POST", body: JSON.stringify({ body }) });
+    return toMsg(r.data);
+  }
+
+  async function downloadFile(f) {
+    const r = await gh(repoBase() + "/git/blobs/" + f.blob, { accept: "application/vnd.github.raw+json", binary: true });
+    const key = await crypto.subtle.importKey("raw", b64ToBytes(f.k), "AES-GCM", false, ["decrypt"]);
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64ToBytes(f.iv) }, key, r.data);
+    const url = URL.createObjectURL(new Blob([plain], { type: f.type || "application/octet-stream" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = f.name || "file";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
   // ---------- rendering ----------
   const urlRe = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g;
+  const FILE_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 12v6M9 15l3 3 3-3"/></svg>';
 
   function fillText(el, text) {
     let last = 0, m;
@@ -326,6 +487,17 @@
       last = m.index + m[0].length;
     }
     if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
+  }
+
+  function fileBubble(name, size, sub) {
+    const b = document.createElement("button");
+    b.className = "bubble file";
+    b.innerHTML = FILE_ICON;
+    const t = document.createElement("span"); t.className = "ft";
+    const n = document.createElement("span"); n.className = "fn"; n.textContent = name;
+    const s = document.createElement("span"); s.className = "fs"; s.textContent = sub || fmtSize(size);
+    t.append(n, s); b.appendChild(t);
+    return b;
   }
 
   function render(opts = {}) {
@@ -343,17 +515,42 @@
     for (const m of all) {
       const wrap = document.createElement("div");
       wrap.className = "msg" + (m.status ? " " + m.status : "");
-      const bub = document.createElement("div");
-      bub.className = "bubble";
-      fillText(bub, m.text);
+      let bub;
+      if (m.file || m.upload) {
+        const name = m.file ? m.file.name : m.upload.name;
+        const size = m.file ? m.file.size : m.upload.size;
+        bub = fileBubble(name, size, m.dl);
+        if (m.file && !m.status) {
+          bub.title = "Download";
+          bub.addEventListener("click", async () => {
+            if (m.dl === "Downloading") return;
+            m.dl = "Downloading"; render();
+            try { await downloadFile(m.file); m.dl = null; }
+            catch (e) {
+              m.dl = e.status === 403 ? "Token needs Contents access"
+                   : e.status === 404 ? "File was erased"
+                   : "Download failed. Tap to retry";
+            }
+            render();
+          });
+        }
+      } else {
+        bub = document.createElement("div");
+        bub.className = "bubble";
+        fillText(bub, m.text);
+      }
       const meta = document.createElement("div");
       meta.className = "meta";
       const time = new Date(m.t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-      meta.textContent = m.status === "failed" ? time + " · Not saved. Tap to retry"
-                       : m.status === "sending" ? time + " · Saving" : time;
+      meta.textContent =
+        m.status === "rejected" ? (m.reason || "Not sent") + ". Tap to dismiss"
+        : m.status === "failed" ? time + " · " + (m.reason || "Not saved") + ". Tap to retry"
+        : m.status === "sending" ? time + " · " + (m.upload ? "Uploading" : "Saving")
+        : time;
       if (m.status === "failed") {
-        bub.title = "Tap to retry";
-        bub.addEventListener("click", () => { m.status = "sending"; render(); flush(); });
+        bub.addEventListener("click", () => { m.status = "sending"; m.reason = null; render(); flush(); });
+      } else if (m.status === "rejected") {
+        bub.addEventListener("click", () => { pending = pending.filter(p => p !== m); render(); });
       }
       wrap.append(bub, meta);
       inner.appendChild(wrap);
@@ -361,25 +558,44 @@
     if (opts.toBottom || nearBottom) log.scrollTop = log.scrollHeight;
   }
 
-  // ---------- load + daily erase ----------
-  // Fetch the issue's comments, permanently delete anything from before
-  // local midnight, and show what's left (today's messages).
+  function updateTitle() {
+    document.title = unseen > 0 && document.hidden ? "(" + unseen + ") Self Chat" : "Self Chat";
+  }
+
+  // ---------- load, live updates, daily erase ----------
+  // Checks GitHub for changes (cheap when nothing changed), permanently deletes
+  // anything from before local midnight, and shows today's messages.
   function refresh(opts = {}) {
-    if (!cfg.token || !cfg.issue) return Promise.resolve();
+    if (!ready) return Promise.resolve();
     if (refreshing) return refreshing;
     refreshing = (async () => {
       showToday();
+      const today = dayKey();
+      const versionAtStart = localVersion;
       try {
-        const all = await listComments();
-        const cutoff = startOfToday().getTime();
-        const old = all.filter(m => new Date(m.t).getTime() < cutoff);
-        if (old.length) {
-          setStatus("Erasing yesterday", "busy");
-          await deleteAll(old);
+        const newDay = cleanedDay !== today;
+        const all = await listComments(!newDay && !opts.full);
+        if (all) {
+          const cutoff = startOfToday().getTime();
+          const old = all.filter(m => new Date(m.t).getTime() < cutoff);
+          if (old.length) {
+            setStatus("Erasing yesterday", "busy");
+            await deleteAll(old);
+            etag = null;
+          }
+          const fresh = all.filter(m => new Date(m.t).getTime() >= cutoff);
+          // ignore this result if a send finished while we were fetching
+          if (localVersion === versionAtStart && !flushing) {
+            const known = new Set(msgs.map(m => m.id));
+            const added = fresh.filter(m => !known.has(m.id)).length;
+            const dl = new Map(msgs.filter(m => m.dl).map(m => [m.id, m.dl]));
+            msgs = fresh.map(m => (dl.has(m.id) ? Object.assign(m, { dl: dl.get(m.id) }) : m));
+            if (added && document.hidden && !opts.initial) { unseen += added; updateTitle(); }
+            render({ toBottom: opts.toBottom });
+          }
         }
-        msgs = all.filter(m => new Date(m.t).getTime() >= cutoff);
-        if (!flushing && !pending.some(p => p.status === "failed")) setStatus("Saved", "ok");
-        render({ toBottom: opts.toBottom });
+        if (newDay) { await deleteFileRefs(false); cleanedDay = today; }
+        if (!flushing && !pending.some(p => p.status === "failed")) setStatus("Live", "ok");
       } catch (e) {
         setStatus(errLabel(e), "err");
       } finally {
@@ -390,16 +606,24 @@
     return refreshing;
   }
 
+  function schedulePoll(delay) {
+    clearTimeout(pollTimer);
+    if (!ready) return;
+    pollTimer = setTimeout(async () => {
+      await refresh();
+      schedulePoll();
+    }, delay != null ? delay : (document.hidden ? POLL_HIDDEN : POLL_VISIBLE));
+  }
+
   function scheduleMidnight() {
     clearTimeout(midnightTimer);
     const next = startOfToday();
     next.setDate(next.getDate() + 1);
     midnightTimer = setTimeout(() => {
-      // drop anything typed before midnight that never saved
       pending = pending.filter(p => new Date(p.t).getTime() >= startOfToday().getTime());
       msgs = [];
       render();
-      refresh({ toBottom: true });
+      refresh({ toBottom: true, full: true });
     }, next - Date.now() + 2000);
   }
 
@@ -414,7 +638,9 @@
   }
 
   async function connect() {
-    msgs = []; pending = [];
+    ready = false;
+    clearTimeout(pollTimer);
+    msgs = []; pending = []; etag = null; lastCount = 0; cleanedDay = "";
     showToday();
     if (!cfg.token || !cfg.owner || !cfg.repo) {
       setStatus("Not connected", "idle");
@@ -431,8 +657,10 @@
       render();
       return false;
     }
+    ready = true;
     enableInput(true);
-    await refresh({ toBottom: true });
+    await refresh({ toBottom: true, initial: true });
+    schedulePoll();
     box.focus();
     return true;
   }
@@ -448,31 +676,51 @@
     flush();
   }
 
-  // Sends one at a time so messages keep their order.
+  function addFiles(list) {
+    if (!ready) return;
+    for (const f of list) {
+      const p = { id: newId(), t: new Date().toISOString(), upload: f, status: "sending" };
+      if (f.size > MAX_FILE) { p.status = "rejected"; p.reason = "Too large, 50 MB max"; }
+      pending.push(p);
+    }
+    render({ toBottom: true });
+    flush();
+  }
+
+  // Sends one item at a time so everything keeps its order.
   async function flush() {
     if (flushing) return;
     flushing = true;
     try {
       let p;
       while ((p = pending.find(x => x.status === "sending"))) {
-        setStatus("Saving", "busy");
+        setStatus(p.upload ? "Uploading" : "Saving", "busy");
         try {
-          const r = await gh(repoBase() + "/issues/" + cfg.issue + "/comments", {
-            method: "POST", body: JSON.stringify({ body: p.text })
-          });
+          let saved;
+          if (p.upload) {
+            saved = await uploadFile(p.upload);
+          } else {
+            const r = await gh(repoBase() + "/issues/" + cfg.issue + "/comments", {
+              method: "POST", body: JSON.stringify({ body: p.text })
+            });
+            saved = toMsg(r.data);
+          }
           pending = pending.filter(x => x !== p);
-          msgs.push({ id: r.data.id, t: r.data.created_at, text: r.data.body || p.text });
+          msgs.push(saved);
+          localVersion++;
+          etag = null;
         } catch (e) {
-          if (e.status === 404 || e.status === 410) {
-            // issue was deleted or issues turned off; recreate once and retry
+          if (!p.upload && (e.status === 404 || e.status === 410)) {
             try { cfg.issue = null; await findOrCreateIssue(); continue; } catch {}
           }
+          p.status = "failed";
+          p.reason = p.upload && e.status === 403 ? "Token needs Contents access" : null;
           pending.forEach(x => { if (x.status === "sending") x.status = "failed"; });
-          setStatus(errLabel(e), "err");
+          setStatus(p.upload && e.status === 403 ? "Token needs Contents access" : errLabel(e), "err");
         }
         render();
       }
-      if (!pending.some(x => x.status === "failed")) setStatus("Saved", "ok");
+      if (!pending.some(x => x.status === "failed")) setStatus("Live", "ok");
     } finally {
       flushing = false;
     }
@@ -480,10 +728,29 @@
 
   function retryFailed() {
     if (!pending.some(p => p.status === "failed")) return false;
-    pending.forEach(p => { if (p.status === "failed") p.status = "sending"; });
+    pending.forEach(p => { if (p.status === "failed") { p.status = "sending"; p.reason = null; } });
     render(); flush();
     return true;
   }
+
+  // ---------- files: picker, drag and drop, paste ----------
+  attachBtn.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => { addFiles(Array.from(fileInput.files || [])); fileInput.value = ""; });
+  box.addEventListener("paste", e => {
+    const files = Array.from((e.clipboardData && e.clipboardData.files) || []);
+    if (files.length) { e.preventDefault(); addFiles(files); }
+  });
+  let dragDepth = 0;
+  const hasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
+  window.addEventListener("dragenter", e => { if (hasFiles(e) && ready) { dragDepth++; document.body.classList.add("dragging"); } });
+  window.addEventListener("dragleave", e => { if (hasFiles(e)) { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) document.body.classList.remove("dragging"); } });
+  window.addEventListener("dragover", e => { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener("drop", e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0; document.body.classList.remove("dragging");
+    addFiles(Array.from(e.dataTransfer.files || []));
+  });
 
   // ---------- erase now ----------
   clearBtn.addEventListener("click", () => openDlg(confirmDlg));
@@ -492,8 +759,10 @@
     closeDlg(confirmDlg);
     setStatus("Erasing", "busy");
     try {
-      const all = await listComments();
-      await deleteAll(all);
+      const all = await listComments(false);
+      await deleteAll(all || []);
+      await deleteFileRefs(true);
+      etag = null; localVersion++;
       msgs = []; pending = pending.filter(p => p.status === "sending");
       setStatus("Erased", "ok");
       render();
@@ -569,14 +838,17 @@
   });
 
   // ---------- lifecycle ----------
-  $("refreshBtn").addEventListener("click", () => { if (!retryFailed()) refresh(); });
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
-  window.addEventListener("online", () => { if (!retryFailed()) refresh(); });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) { unseen = 0; updateTitle(); schedulePoll(0); }
+    else schedulePoll();
+  });
+  window.addEventListener("online", () => { if (!retryFailed()) schedulePoll(0); });
+  window.addEventListener("focus", () => { unseen = 0; updateTitle(); });
   window.addEventListener("beforeunload", e => {
-    if (pending.length) { e.preventDefault(); e.returnValue = ""; }
+    if (pending.some(p => p.status === "sending" || p.status === "failed")) { e.preventDefault(); e.returnValue = ""; }
   });
 
-  // clean up storage from the earlier version of this page
+  // carry settings over from the first version of this page
   try {
     const v1 = JSON.parse(localStorage.getItem("selfchat.v1") || "null");
     if (v1 && !cfg.owner) { cfg = { owner: v1.owner, repo: v1.repo, token: v1.token }; writeCfg(cfg); }
