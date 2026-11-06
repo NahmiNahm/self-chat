@@ -98,7 +98,14 @@
   .file .fn { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .file .fs { display: block; font-size: 12px; opacity: .85; }
   .file .ft { min-width: 0; }
-  .meta { font-size: 11px; color: var(--muted); margin: 2px 4px 6px; }
+  .meta { font-size: 11px; color: var(--muted); margin: 2px 4px 6px; display: flex; align-items: center; gap: 6px; }
+  .copy {
+    display: inline-flex; align-items: center; gap: 4px;
+    border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    font: inherit; font-size: 11px; padding: 4px 6px; margin: -4px -2px; border-radius: 6px;
+  }
+  .copy:hover { color: var(--text); background: var(--surface); }
+  .copy.done { color: var(--ok); }
   .msg.sending .bubble { opacity: .6; }
   .msg.failed .bubble, .msg.rejected .bubble { background: transparent; color: var(--text); border: 1px solid var(--danger); cursor: pointer; }
   .msg.failed .meta, .msg.rejected .meta { color: var(--danger); }
@@ -500,6 +507,45 @@
     return b;
   }
 
+  // ---------- copy ----------
+  const COPY_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  const CHECK_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+  let copiedId = null, copiedTimer = null;
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fallback for browsers that block the clipboard API
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", "");
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch {}
+      ta.remove();
+      return ok;
+    }
+  }
+
+  function copyButton(m) {
+    const b = document.createElement("button");
+    const done = copiedId === m.id;
+    b.className = "copy" + (done ? " done" : "");
+    b.title = "Copy"; b.setAttribute("aria-label", "Copy message");
+    b.innerHTML = (done ? CHECK_ICON : COPY_ICON) + "<span>" + (done ? "Copied" : "Copy") + "</span>";
+    b.addEventListener("click", async e => {
+      e.stopPropagation();
+      if (!(await copyText(m.text))) return;
+      copiedId = m.id;
+      clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => { copiedId = null; render(); }, 1500);
+      render();
+    });
+    return b;
+  }
+
   function render(opts = {}) {
     const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
     inner.textContent = "";
@@ -542,11 +588,14 @@
       const meta = document.createElement("div");
       meta.className = "meta";
       const time = new Date(m.t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-      meta.textContent =
+      const label = document.createElement("span");
+      label.textContent =
         m.status === "rejected" ? (m.reason || "Not sent") + ". Tap to dismiss"
         : m.status === "failed" ? time + " · " + (m.reason || "Not saved") + ". Tap to retry"
         : m.status === "sending" ? time + " · " + (m.upload ? "Uploading" : "Saving")
         : time;
+      if (typeof m.text === "string" && !m.upload) meta.appendChild(copyButton(m));
+      meta.appendChild(label);
       if (m.status === "failed") {
         bub.addEventListener("click", () => { m.status = "sending"; m.reason = null; render(); flush(); });
       } else if (m.status === "rejected") {
