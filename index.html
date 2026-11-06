@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.github.com; img-src data:; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Self Chat</title>
+<meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
+<style>
+  :root {
+    --bg: #f6f6f4;
+    --surface: #ffffff;
+    --text: #1d1d1f;
+    --muted: #6b6b70;
+    --border: #e2e2de;
+    --bubble: #2f5d50;
+    --bubble-text: #ffffff;
+    --accent: #2f5d50;
+    --on-accent: #ffffff;
+    --danger: #b3261e;
+    --ok: #2e7d32;
+    --warn: #b26a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16171a;
+      --surface: #1f2024;
+      --text: #ececec;
+      --muted: #9a9aa2;
+      --border: #2e2f35;
+      --bubble: #3d7a69;
+      --bubble-text: #ffffff;
+      --accent: #6fb5a1;
+      --on-accent: #10201b;
+      --danger: #ff8a80;
+      --ok: #81c784;
+      --warn: #ffb74d;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px 10px 16px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  header h1 { font-size: 16px; font-weight: 600; margin: 0; }
+  #today { font-size: 13px; color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; margin-right: 4px; }
+  #status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  #status[data-s="ok"]::before { background: var(--ok); }
+  #status[data-s="busy"]::before { background: var(--warn); }
+  #status[data-s="err"]::before { background: var(--danger); }
+  .icon-btn {
+    border: 0; background: transparent; color: var(--muted);
+    width: 36px; height: 36px; border-radius: 8px; cursor: pointer;
+    display: grid; place-items: center; flex: none;
+  }
+  .icon-btn:hover { background: var(--bg); color: var(--text); }
+  .icon-btn:disabled { opacity: .4; cursor: default; }
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px 8px;
+    display: flex;
+    flex-direction: column;
+  }
+  .inner { max-width: 760px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  .msg { align-self: flex-end; max-width: min(80%, 560px); display: flex; flex-direction: column; align-items: flex-end; }
+  .msg:first-child { margin-top: auto; }
+  .bubble {
+    background: var(--bubble); color: var(--bubble-text);
+    padding: 8px 12px; border-radius: 16px 16px 4px 16px;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .bubble a { color: inherit; text-decoration: underline; }
+  .meta { font-size: 11px; color: var(--muted); margin: 2px 4px 6px; }
+  .msg.sending .bubble { opacity: .6; }
+  .msg.failed .bubble { background: transparent; color: var(--text); border: 1px solid var(--danger); cursor: pointer; }
+  .msg.failed .meta { color: var(--danger); }
+  #empty { margin: auto; color: var(--muted); text-align: center; font-size: 14px; padding: 24px; }
+  footer {
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    padding: 10px 16px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  .composer { max-width: 760px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; }
+  textarea {
+    flex: 1; resize: none; max-height: 40vh; min-height: 42px;
+    font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 12px; padding: 9px 12px; outline: none;
+  }
+  textarea:focus { border-color: var(--accent); }
+  #send {
+    height: 42px; padding: 0 16px; border: 0; border-radius: 12px;
+    background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 600; cursor: pointer;
+  }
+  #send:disabled { opacity: .5; cursor: default; }
+  .hint { max-width: 760px; margin: 4px auto 0; font-size: 11px; color: var(--muted); }
+
+  dialog {
+    border: 1px solid var(--border); border-radius: 14px; padding: 0;
+    background: var(--surface); color: var(--text); width: min(440px, calc(100vw - 32px));
+  }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dlg { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .dlg h2 { margin: 0; font-size: 17px; }
+  .dlg p { margin: 0; font-size: 13px; color: var(--muted); }
+  .dlg label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
+  .dlg input {
+    font: inherit; font-weight: 400; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; outline: none;
+  }
+  .dlg input:focus { border-color: var(--accent); }
+  .row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .btn { font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+         border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .btn.danger { color: var(--danger); }
+  .btn.left { margin-right: auto; }
+  @media (max-width: 380px) { #today { visibility: hidden; } }
+  #cfgMsg { font-size: 13px; min-height: 1em; }
+  #cfgMsg.err { color: var(--danger); }
+  #cfgMsg.ok { color: var(--ok); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Self Chat</h1>
+  <span id="today"></span>
+  <span id="status" data-s="idle">Not connected</span>
+  <button class="icon-btn" id="clearBtn" title="Erase today now" aria-label="Erase today now" disabled>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+  </button>
+  <button class="icon-btn" id="refreshBtn" title="Refresh" aria-label="Refresh">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+  </button>
+  <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+  </button>
+</header>
+
+<main id="log"><div class="inner" id="inner"></div></main>
+
+<footer>
+  <div class="composer">
+    <textarea id="box" rows="1" placeholder="Type and press Enter" autocomplete="off" disabled></textarea>
+    <button id="send" disabled>Send</button>
+  </div>
+  <div class="hint">Enter sends. Shift + Enter adds a new line. Everything is erased at midnight.</div>
+</footer>
+
+<dialog id="settings">
+  <div class="dlg">
+    <h2>Connect to GitHub</h2>
+    <p>Messages are saved as comments on one issue in a private repo you own, and erased each day. Your token is stored only in this browser.</p>
+    <label>GitHub username or org
+      <input id="cfgOwner" placeholder="NahmiNahm" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </label>
+    <label>Data repository (private)
+      <input id="cfgRepo" placeholder="self-chat-data" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </label>
+    <label>Fine-grained personal access token
+      <input id="cfgToken" type="password" placeholder="github_pat_..." autocomplete="off" spellcheck="false">
+    </label>
+    <div id="cfgMsg"></div>
+    <div class="row">
+      <button class="btn danger left" id="cfgForget">Forget token</button>
+      <button class="btn" id="cfgCancel">Cancel</button>
+      <button class="btn primary" id="cfgSave">Save and connect</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="confirmClear">
+  <div class="dlg">
+    <h2>Erase today's messages?</h2>
+    <p>They're deleted from GitHub right away and can't be recovered.</p>
+    <div class="row">
+      <button class="btn" id="clearCancel">Cancel</button>
+      <button class="btn primary" id="clearOk">Erase</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  "use strict";
+
+  const API = "https://api.github.com";
+  const LS_KEY = "selfchat.v2";
+  const ISSUE_TITLE = "Self Chat";
+
+  // ---------- state ----------
+  let cfg = readCfg();
+  let msgs = [];          // today's saved messages: { id, t, text }
+  let pending = [];       // not yet saved: { id, t, text, status: 'sending'|'failed' }
+  let flushing = false;
+  let refreshing = null;
+  let midnightTimer = null;
+
+  // ---------- dom ----------
+  const $ = id => document.getElementById(id);
+  const log = $("log"), inner = $("inner"), box = $("box"), sendBtn = $("send");
+  const statusEl = $("status"), todayEl = $("today"), clearBtn = $("clearBtn");
+  const dlg = $("settings"), confirmDlg = $("confirmClear");
+
+  function readCfg() {
+    try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
+  }
+  function writeCfg(c) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(c)); return true; } catch { return false; }
+  }
+
+  // ---------- helpers ----------
+  function setStatus(text, s) { statusEl.textContent = text; statusEl.dataset.s = s; }
+  function startOfToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+  function showToday() {
+    todayEl.textContent = new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  }
+  function enableInput(on) { box.disabled = sendBtn.disabled = clearBtn.disabled = !on; }
+  function newId() {
+    return "tmp-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+  }
+  function openDlg(d) { if (typeof d.showModal === "function") d.showModal(); else d.setAttribute("open", ""); }
+  function closeDlg(d) { if (d.close) d.close(); else d.removeAttribute("open"); }
+
+  // ---------- GitHub API ----------
+  function repoBase() {
+    return "/repos/" + encodeURIComponent(cfg.owner) + "/" + encodeURIComponent(cfg.repo);
+  }
+
+  async function gh(path, opts = {}) {
+    const headers = { "Accept": "application/vnd.github+json", "Authorization": "Bearer " + cfg.token };
+    if (opts.body) headers["Content-Type"] = "application/json";
+    let res;
+    try {
+      res = await fetch(API + path, { method: opts.method || "GET", headers, body: opts.body, cache: "no-store" });
+    } catch {
+      const err = new Error("Network error"); err.status = 0; throw err;
+    }
+    if (res.status === 204) return { status: 204, data: null };
+    let data = null;
+    try { data = await res.json(); } catch {}
+    if (!res.ok) {
+      const err = new Error((data && data.message) || ("HTTP " + res.status));
+      err.status = res.status;
+      throw err;
+    }
+    return { status: res.status, data };
+  }
+
+  async function findOrCreateIssue() {
+    if (cfg.issue) {
+      try {
+        const r = await gh(repoBase() + "/issues/" + cfg.issue);
+        if (r.data && !r.data.pull_request) return cfg.issue;
+      } catch (e) {
+        if (e.status !== 404 && e.status !== 410) throw e;
+      }
+    }
+    for (let page = 1; page <= 10; page++) {
+      const r = await gh(repoBase() + "/issues?state=all&per_page=100&page=" + page);
+      const hit = r.data.find(i => !i.pull_request && i.title === ISSUE_TITLE);
+      if (hit) { cfg.issue = hit.number; writeCfg(cfg); return hit.number; }
+      if (r.data.length < 100) break;
+    }
+    const r = await gh(repoBase() + "/issues", {
+      method: "POST",
+      body: JSON.stringify({ title: ISSUE_TITLE, body: "Messages from the Self Chat page. Erased every day." })
+    });
+    cfg.issue = r.data.number; writeCfg(cfg);
+    return cfg.issue;
+  }
+
+  async function listComments() {
+    const out = [];
+    for (let page = 1; page <= 50; page++) {
+      const r = await gh(repoBase() + "/issues/" + cfg.issue + "/comments?per_page=100&page=" + page);
+      for (const c of r.data) out.push({ id: c.id, t: c.created_at, text: c.body || "" });
+      if (r.data.length < 100) break;
+    }
+    out.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0));
+    return out;
+  }
+
+  async function deleteComment(id) {
+    try { await gh(repoBase() + "/issues/comments/" + id, { method: "DELETE" }); }
+    catch (e) { if (e.status !== 404) throw e; }  // already gone (another device erased it)
+  }
+
+  async function deleteAll(list) {
+    // small parallel batches to stay well under GitHub's rate limits
+    for (let i = 0; i < list.length; i += 5) {
+      await Promise.all(list.slice(i, i + 5).map(m => deleteComment(m.id)));
+    }
+  }
+
+  // ---------- rendering ----------
+  const urlRe = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g;
+
+  function fillText(el, text) {
+    let last = 0, m;
+    urlRe.lastIndex = 0;
+    while ((m = urlRe.exec(text))) {
+      if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));
+      const a = document.createElement("a");
+      a.href = m[0]; a.textContent = m[0]; a.target = "_blank"; a.rel = "noopener noreferrer";
+      el.appendChild(a);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
+  }
+
+  function render(opts = {}) {
+    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+    inner.textContent = "";
+    const all = msgs.concat(pending);
+
+    if (!all.length) {
+      const e = document.createElement("div");
+      e.id = "empty";
+      e.textContent = cfg.token ? "New day, blank page. Type below and press Enter." : "Open settings to connect your repo.";
+      inner.appendChild(e);
+    }
+
+    for (const m of all) {
+      const wrap = document.createElement("div");
+      wrap.className = "msg" + (m.status ? " " + m.status : "");
+      const bub = document.createElement("div");
+      bub.className = "bubble";
+      fillText(bub, m.text);
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const time = new Date(m.t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+      meta.textContent = m.status === "failed" ? time + " · Not saved. Tap to retry"
+                       : m.status === "sending" ? time + " · Saving" : time;
+      if (m.status === "failed") {
+        bub.title = "Tap to retry";
+        bub.addEventListener("click", () => { m.status = "sending"; render(); flush(); });
+      }
+      wrap.append(bub, meta);
+      inner.appendChild(wrap);
+    }
+    if (opts.toBottom || nearBottom) log.scrollTop = log.scrollHeight;
+  }
+
+  // ---------- load + daily erase ----------
+  // Fetch the issue's comments, permanently delete anything from before
+  // local midnight, and show what's left (today's messages).
+  function refresh(opts = {}) {
+    if (!cfg.token || !cfg.issue) return Promise.resolve();
+    if (refreshing) return refreshing;
+    refreshing = (async () => {
+      showToday();
+      try {
+        const all = await listComments();
+        const cutoff = startOfToday().getTime();
+        const old = all.filter(m => new Date(m.t).getTime() < cutoff);
+        if (old.length) {
+          setStatus("Erasing yesterday", "busy");
+          await deleteAll(old);
+        }
+        msgs = all.filter(m => new Date(m.t).getTime() >= cutoff);
+        if (!flushing && !pending.some(p => p.status === "failed")) setStatus("Saved", "ok");
+        render({ toBottom: opts.toBottom });
+      } catch (e) {
+        setStatus(errLabel(e), "err");
+      } finally {
+        scheduleMidnight();
+        refreshing = null;
+      }
+    })();
+    return refreshing;
+  }
+
+  function scheduleMidnight() {
+    clearTimeout(midnightTimer);
+    const next = startOfToday();
+    next.setDate(next.getDate() + 1);
+    midnightTimer = setTimeout(() => {
+      // drop anything typed before midnight that never saved
+      pending = pending.filter(p => new Date(p.t).getTime() >= startOfToday().getTime());
+      msgs = [];
+      render();
+      refresh({ toBottom: true });
+    }, next - Date.now() + 2000);
+  }
+
+  function errLabel(e) {
+    if (!e) return "Error";
+    if (e.status === 0) return "Offline";
+    if (e.status === 401) return "Bad token";
+    if (e.status === 403) return "Token needs Issues access";
+    if (e.status === 404) return "Repo not found";
+    if (e.status === 410) return "Issues are off in repo";
+    return "Error";
+  }
+
+  async function connect() {
+    msgs = []; pending = [];
+    showToday();
+    if (!cfg.token || !cfg.owner || !cfg.repo) {
+      setStatus("Not connected", "idle");
+      enableInput(false);
+      render();
+      return false;
+    }
+    setStatus("Loading", "busy");
+    try {
+      await findOrCreateIssue();
+    } catch (e) {
+      setStatus(errLabel(e), "err");
+      enableInput(false);
+      render();
+      return false;
+    }
+    enableInput(true);
+    await refresh({ toBottom: true });
+    box.focus();
+    return true;
+  }
+
+  // ---------- sending ----------
+  function send() {
+    const text = box.value.replace(/\s+$/, "");
+    if (!text.trim() || box.disabled) return;
+    pending.push({ id: newId(), t: new Date().toISOString(), text, status: "sending" });
+    box.value = "";
+    autosize();
+    render({ toBottom: true });
+    flush();
+  }
+
+  // Sends one at a time so messages keep their order.
+  async function flush() {
+    if (flushing) return;
+    flushing = true;
+    try {
+      let p;
+      while ((p = pending.find(x => x.status === "sending"))) {
+        setStatus("Saving", "busy");
+        try {
+          const r = await gh(repoBase() + "/issues/" + cfg.issue + "/comments", {
+            method: "POST", body: JSON.stringify({ body: p.text })
+          });
+          pending = pending.filter(x => x !== p);
+          msgs.push({ id: r.data.id, t: r.data.created_at, text: r.data.body || p.text });
+        } catch (e) {
+          if (e.status === 404 || e.status === 410) {
+            // issue was deleted or issues turned off; recreate once and retry
+            try { cfg.issue = null; await findOrCreateIssue(); continue; } catch {}
+          }
+          pending.forEach(x => { if (x.status === "sending") x.status = "failed"; });
+          setStatus(errLabel(e), "err");
+        }
+        render();
+      }
+      if (!pending.some(x => x.status === "failed")) setStatus("Saved", "ok");
+    } finally {
+      flushing = false;
+    }
+  }
+
+  function retryFailed() {
+    if (!pending.some(p => p.status === "failed")) return false;
+    pending.forEach(p => { if (p.status === "failed") p.status = "sending"; });
+    render(); flush();
+    return true;
+  }
+
+  // ---------- erase now ----------
+  clearBtn.addEventListener("click", () => openDlg(confirmDlg));
+  $("clearCancel").addEventListener("click", () => closeDlg(confirmDlg));
+  $("clearOk").addEventListener("click", async () => {
+    closeDlg(confirmDlg);
+    setStatus("Erasing", "busy");
+    try {
+      const all = await listComments();
+      await deleteAll(all);
+      msgs = []; pending = pending.filter(p => p.status === "sending");
+      setStatus("Erased", "ok");
+      render();
+    } catch (e) {
+      setStatus(errLabel(e), "err");
+    }
+  });
+
+  // ---------- composer ----------
+  function autosize() {
+    box.style.height = "auto";
+    box.style.height = Math.min(box.scrollHeight + 2, window.innerHeight * 0.4) + "px";
+  }
+  box.addEventListener("input", autosize);
+  box.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      send();
+    }
+  });
+  sendBtn.addEventListener("click", () => { send(); box.focus(); });
+
+  // ---------- settings ----------
+  const cfgMsg = $("cfgMsg");
+  function openSettings() {
+    $("cfgOwner").value = cfg.owner || "";
+    $("cfgRepo").value = cfg.repo || "";
+    $("cfgToken").value = "";
+    $("cfgToken").placeholder = cfg.token ? "Saved. Leave blank to keep it" : "github_pat_...";
+    cfgMsg.textContent = ""; cfgMsg.className = "";
+    openDlg(dlg);
+  }
+
+  $("settingsBtn").addEventListener("click", openSettings);
+  $("cfgCancel").addEventListener("click", () => closeDlg(dlg));
+  $("cfgForget").addEventListener("click", () => {
+    cfg = { owner: cfg.owner, repo: cfg.repo };
+    writeCfg(cfg);
+    closeDlg(dlg);
+    connect();
+  });
+  $("cfgSave").addEventListener("click", async () => {
+    const next = {
+      owner: $("cfgOwner").value.trim(),
+      repo: $("cfgRepo").value.trim(),
+      token: $("cfgToken").value.trim() || cfg.token || ""
+    };
+    if (!next.owner || !next.repo || !next.token) {
+      cfgMsg.className = "err"; cfgMsg.textContent = "Fill in all three fields.";
+      return;
+    }
+    if (next.owner === cfg.owner && next.repo === cfg.repo) next.issue = cfg.issue;
+    cfgMsg.className = ""; cfgMsg.textContent = "Checking";
+    const prev = cfg;
+    cfg = next;
+    let fail = null;
+    try {
+      const r = await gh(repoBase());
+      if (r.data.private === false) fail = "That repo is public. Anyone could read your messages. Make it private first.";
+      else if (r.data.has_issues === false) fail = "Issues are turned off for that repo. Turn them on in the repo's Settings, under Features.";
+    } catch (e) {
+      fail = e.status === 401 ? "GitHub rejected the token."
+           : e.status === 404 ? "Repo not found, or the token can't see it."
+           : (e.message || "Couldn't reach GitHub.");
+    }
+    if (fail) { cfgMsg.className = "err"; cfgMsg.textContent = fail; cfg = prev; return; }
+    if (!writeCfg(cfg)) {
+      cfgMsg.className = "err";
+      cfgMsg.textContent = "This browser blocked local storage, so the token can't be saved here.";
+    }
+    closeDlg(dlg);
+    connect();
+  });
+
+  // ---------- lifecycle ----------
+  $("refreshBtn").addEventListener("click", () => { if (!retryFailed()) refresh(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+  window.addEventListener("online", () => { if (!retryFailed()) refresh(); });
+  window.addEventListener("beforeunload", e => {
+    if (pending.length) { e.preventDefault(); e.returnValue = ""; }
+  });
+
+  // clean up storage from the earlier version of this page
+  try {
+    const v1 = JSON.parse(localStorage.getItem("selfchat.v1") || "null");
+    if (v1 && !cfg.owner) { cfg = { owner: v1.owner, repo: v1.repo, token: v1.token }; writeCfg(cfg); }
+    localStorage.removeItem("selfchat.v1");
+  } catch {}
+
+  connect().then(() => { if (!cfg.token) openSettings(); });
+})();
+</script>
+</body>
+</html>
