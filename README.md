@@ -31,3 +31,4 @@ Use a fine-grained token at https://github.com/settings/personal-access-tokens, 
 - The 50 MB limit is per file. Larger files are refused before anything is uploaded.
 - Like any online service, GitHub may keep internal backups for a while. Deleted messages could exist in those backups. Files stay unreadable, because their keys are gone.
 - **Forget token** in settings removes the token from that browser. To cut off access everywhere, delete the token.
+- **Links button.** Add a `## Links` section to the data repo's README with lines like `- [Name](https://...)`. A folder button then appears in the page header. With one link it opens that link directly; with more, it shows a list. The links live only in the private repo, never in this page's code.

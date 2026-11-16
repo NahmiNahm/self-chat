@@ -74,6 +74,7 @@
   }
   .icon-btn:hover { background: var(--bg); color: var(--text); }
   .icon-btn:disabled { opacity: .4; cursor: default; }
+  .icon-btn[hidden] { display: none; }
   #log {
     flex: 1;
     overflow-y: auto;
@@ -159,6 +160,12 @@
   #cfgMsg { font-size: 13px; min-height: 1em; }
   #cfgMsg.err { color: var(--danger); }
   #cfgMsg.ok { color: var(--ok); }
+  #linksList { display: flex; flex-direction: column; gap: 8px; }
+  #linksList a {
+    display: block; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); text-decoration: none; overflow-wrap: anywhere;
+  }
+  #linksList a:hover { border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -168,6 +175,9 @@
   <span id="status" data-s="idle">Not connected</span>
   <button class="icon-btn" id="clearBtn" title="Erase today now" aria-label="Erase today now" disabled>
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+  </button>
+  <button class="icon-btn" id="linksBtn" title="Links" aria-label="Links" hidden>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
   </button>
   <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -208,6 +218,16 @@
       <button class="btn danger left" id="cfgForget">Forget token</button>
       <button class="btn" id="cfgCancel">Cancel</button>
       <button class="btn primary" id="cfgSave">Save and connect</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="linksDlg">
+  <div class="dlg">
+    <h2>Links</h2>
+    <div id="linksList"></div>
+    <div class="row">
+      <button class="btn" id="linksClose">Close</button>
     </div>
   </div>
 </dialog>
@@ -686,10 +706,72 @@
     return "Error";
   }
 
+  // ---------- links (read from the private repo's README, never stored in this page) ----------
+  const linksBtn = $("linksBtn"), linksDlg = $("linksDlg"), linksList = $("linksList");
+  let links = [];
+
+  function parseLinks(md) {
+    const out = [];
+    let inLinks = false;
+    for (const line of md.split(/\r?\n/)) {
+      const h = line.match(/^#{1,6}\s+(.*?)\s*#*\s*$/);
+      if (h) { inLinks = /^links$/i.test(h[1]); continue; }
+      if (!inLinks) continue;
+      const re = /\[([^\]]+)\]\((\S+?)\)/g;
+      let m;
+      while ((m = re.exec(line))) {
+        try {
+          const u = new URL(m[2]);
+          if (u.protocol === "https:") out.push({ text: m[1].trim(), url: u.href });
+        } catch {}
+      }
+    }
+    return out;
+  }
+
+  function showLinks() {
+    linksBtn.hidden = links.length === 0;
+    if (links.length === 1) {
+      linksBtn.title = links[0].text;
+      linksBtn.setAttribute("aria-label", links[0].text);
+    } else {
+      linksBtn.title = "Links";
+      linksBtn.setAttribute("aria-label", "Links");
+    }
+  }
+
+  async function loadLinks() {
+    try {
+      const r = await gh(repoBase() + "/readme");
+      const bytes = b64ToBytes(String(r.data.content || "").replace(/\s/g, ""));
+      links = parseLinks(new TextDecoder().decode(bytes));
+    } catch {
+      links = [];
+    }
+    showLinks();
+  }
+
+  function openLink(l) { window.open(l.url, "_blank", "noopener,noreferrer"); }
+
+  linksBtn.addEventListener("click", () => {
+    if (links.length === 1) { openLink(links[0]); return; }
+    linksList.textContent = "";
+    for (const l of links) {
+      const a = document.createElement("a");
+      a.href = l.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+      a.textContent = l.text;
+      a.addEventListener("click", () => closeDlg(linksDlg));
+      linksList.appendChild(a);
+    }
+    openDlg(linksDlg);
+  });
+  $("linksClose").addEventListener("click", () => closeDlg(linksDlg));
+
   async function connect() {
     ready = false;
     clearTimeout(pollTimer);
     msgs = []; pending = []; etag = null; lastCount = 0; cleanedDay = "";
+    links = []; showLinks();
     showToday();
     if (!cfg.token || !cfg.owner || !cfg.repo) {
       setStatus("Not connected", "idle");
@@ -708,6 +790,7 @@
     }
     ready = true;
     enableInput(true);
+    loadLinks();
     await refresh({ toBottom: true, initial: true });
     schedulePoll();
     box.focus();
